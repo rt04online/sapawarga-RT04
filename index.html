@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sapa Warga RT04</title>
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Chart.js, SheetJS, jsPDF, autoTable -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+  <style>
+    :root { --radius:14px; --card-bg:#fff; --bg:#f7f8fc; }
+    body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background: var(--bg); }
+    header { background: linear-gradient(90deg,#2563eb,#1e40af); color:#fff; padding:.9rem 1rem; display:flex; align-items:center; justify-content:space-between; box-shadow:0 6px 20px rgba(0,0,0,0.08); border-bottom: 4px solid rgba(0,0,0,0.03); }
+    header .brand { display:flex; gap:.6rem; align-items:center; }
+    header img { width:56px; height:56px; border-radius:50%; object-fit:cover; border:2px solid #fff; }
+    header .datetime { font-size:16px; font-weight:600; margin-right:12px; }
+    .ticker { background:#f59e0b; color:#fff; padding:.5rem .8rem; font-weight:700; overflow:hidden; }
+    .ticker p { white-space:nowrap; padding-left:100%; display:inline-block; animation: tick 18s linear infinite; margin:0; }
+    @keyframes tick { 0%{transform:translateX(0)} 100%{transform:translateX(-100%)} }
+
+    .card-rounded { border-radius: var(--radius); box-shadow: 0 8px 28px rgba(13,31,63,0.06); background: var(--card-bg); }
+    .stat-card { border-radius: 10px; background: #fff; padding: .6rem; text-align:center; box-shadow: 0 6px 18px rgba(0,0,0,0.04); }
+    .stat-card .value { font-size:1.25rem; font-weight:700; }
+    .photo-grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap:12px; }
+    .photo { position:relative; border-radius:10px; overflow:hidden; background:#fff; box-shadow:0 6px 18px rgba(0,0,0,0.04); }
+    .photo img { width:100%; height:140px; object-fit:cover; display:block; }
+    .photo .meta { padding:.5rem; font-size:.85rem; color:#444; }
+    .photo .del-btn { position:absolute; top:8px; right:8px; background:rgba(0,0,0,0.6); color:#fff; padding:4px 6px; border-radius:6px; cursor:pointer; font-size:.8rem; }
+
+    #loginPage { min-height:100vh; display:flex; align-items:center; justify-content:center; background: linear-gradient(120deg,#2563eb,#1e40af); padding:1rem; }
+    .login-card { background:#fff; width:100%; max-width:520px; padding:1.5rem; border-radius:16px; box-shadow:0 12px 36px rgba(0,0,0,0.18); text-align:center; }
+
+    table thead th { background:#f3f4f6; font-size:.82rem; text-transform:uppercase; }
+    .hidden { display:none !important; }
+
+    /* Responsive tweaks */
+    @media(max-width:768px){ .header-right { display:none } .datetime{ font-size:14px } }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN PAGE -->
+<section id="loginPage">
+  <div class="login-card">
+    <img id="logoLogin" src="https://via.placeholder.com/100x100.png?text=RT" alt="Logo">
+    <h3 class="mt-2">SAPA WARGA RT04</h3>
+    <p class="text-muted">Login untuk mengelola atau melihat data RT</p>
+    <div class="mb-2"><input id="username" class="form-control" placeholder="Username (admin/user)"></div>
+    <div class="mb-2"><input id="password" type="password" class="form-control" placeholder="Password"></div>
+    <div class="d-grid gap-2">
+      <button class="btn btn-primary" onclick="login()">Login</button>
+      <button class="btn btn-outline-light" onclick="fillDemo()">Isi demo (auto)</button>
+    </div>
+    <small class="d-block text-muted mt-3">Copyright: <b>@2025</b> atau <b>Barokah Media Bersama</b></small>
+  </div>
+</section>
+
+<!-- APP -->
+<section id="app" class="hidden">
+  <header>
+    <div class="brand">
+      <img id="logoMain" src="https://via.placeholder.com/80x80.png?text=RT04" alt="Logo">
+      <div>
+        <div style="font-weight:700">SAPA WARGA RT04</div>
+        <div style="font-size:.85rem; opacity:.85">Dashboard Layanan Warga</div>
+      </div>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:.75rem;">
+      <div class="header-right d-flex align-items-center">
+        <div id="dateTime" class="datetime"></div>
+      </div>
+      <button class="btn btn-light btn-sm me-2" onclick="openReadme()">README</button>
+      <button class="btn btn-outline-light btn-sm me-2" onclick="openLog()">Log Aktivitas</button>
+      <button class="btn btn-danger btn-sm" onclick="logout()">Sign Out</button>
+    </div>
+  </header>
+
+  <div class="ticker"><p id="runningText">Himbauan: Jaga kebersihan lingkungan! Gotong royong setiap Sabtu pagi.</p></div>
+
+  <div class="container py-3">
+    <!-- Tabs -->
+    <ul class="nav nav-tabs" id="tabs">
+      <li class="nav-item"><a class="nav-link active" data-target="home">Home</a></li>
+      <li class="nav-item"><a class="nav-link" data-target="dashboard">Dashboard</a></li>
+      <li class="nav-item"><a class="nav-link" data-target="data">Data Warga</a></li>
+      <li class="nav-item"><a class="nav-link" data-target="iuran">Iuran</a></li>
+      <li class="nav-item"><a class="nav-link" data-target="keuangan">Keuangan</a></li>
+      <li class="nav-item adminOnly"><a class="nav-link" data-target="upload">Upload</a></li>
+      <li class="nav-item adminOnly"><a class="nav-link" data-target="admin">Admin Input</a></li>
+      <li class="nav-item adminOnly"><a class="nav-link" data-target="photos">Foto Kegiatan</a></li>
+      <li class="nav-item adminOnly"><a class="nav-link" data-target="import">Import Excel</a></li>
+      <li class="nav-item adminOnly"><a class="nav-link" data-target="backup">Backup/Restore</a></li>
+    </ul>
+
+    <!-- HOME -->
+    <div id="home" class="mt-3">
+      <div class="card card-rounded p-3 mb-3">
+        <h5>Galeri Utama</h5>
+        <div class="slideshow mt-2">
+          <img class="active" src="file:///C:/Users/wingk/Downloads/pemilihanrw.jpgq=80&w=1200&auto=format&fit=crop" alt="">
+          <img src="https://images.unsplash.com/photo-1555584392-4b3a8f1c2a63?q=80&w=1200&auto=format&fit=crop" alt="">
+          <img src="https://images.unsplash.com/photo-1509099836639-18ba1795216d?q=80&w=1200&auto=format&fit=crop" alt="">
+        </div>
+      </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="dashboard" class="mt-3 hidden">
+      <div class="row g-3">
+        <div class="col-lg-6">
+          <div class="card card-rounded p-3">
+            <h5>Demografi Warga</h5>
+            <canvas id="demografiChart" height="150"></canvas>
+            <div class="row g-2 mt-3">
+              <div class="col-4"><div class="stat-card"><div class="small text-muted">Total Kepala Keluarga</div><div id="cardTotalKK" class="value">0</div></div></div>
+              <div class="col-4"><div class="stat-card"><div class="small text-muted">Jenis Pekerjaan</div><div id="cardTotalJob" class="value">0</div></div></div>
+              <div class="col-4"><div class="stat-card"><div class="small text-muted">Status Pernikahan</div><div class="d-flex justify-content-center gap-3 mt-2"><div class="text-center"><div class="small">Kawin</div><div id="cardNikahKawin" class="value">0</div></div><div class="text-center"><div class="small">Belum</div><div id="cardNikahBelum" class="value">0</div></div><div class="text-center"><div class="small">Cerai</div><div id="cardNikahCerai" class="value">0</div></div></div></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-6">
+          <div class="card card-rounded p-3">
+            <h5>Laporan Keuangan</h5>
+            <canvas id="financeChart" height="150"></canvas>
+            <div class="row g-2 mt-3">
+              <div class="col-4"><div class="stat-card"><div class="small text-muted">Total Pemasukan</div><div id="cardTotalIn" class="value">Rp0</div></div></div>
+              <div class="col-4"><div class="stat-card"><div class="small text-muted">Total Pengeluaran</div><div id="cardTotalOut" class="value">Rp0</div></div></div>
+              <div class="col-4"><div class="stat-card"><div class="small text-muted">Sisa Kas</div><div id="cardTotalBal" class="value">Rp0</div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DATA WARGA -->
+    <div id="data" class="mt-3 hidden">
+      <div class="card card-rounded p-3">
+        <div class="d-flex justify-content-between align-items-center">
+          <h5 class="m-0">Data Warga</h5>
+          <div class="d-flex gap-2 align-items-center">
+            <input id="searchWarga" class="form-control" style="width:240px" placeholder="Cari...">
+            <button class="btn btn-outline-primary" onclick="exportExcel('tableWarga')">Export Excel</button>
+            <button class="btn btn-outline-danger" onclick="exportPDF('tableWarga','Data Warga')">Export PDF</button>
+          </div>
+        </div>
+        <div class="table-responsive mt-3">
+          <table id="tableWarga" class="table table-bordered align-middle">
+            <thead><tr><th>Nama</th><th>Umur</th><th>JK</th><th>Pekerjaan</th><th>Status Nikah</th><th>KK</th><th>Aksi</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- IURAN -->
+    <div id="iuran" class="mt-3 hidden">
+      <div class="card card-rounded p-3">
+        <div class="d-flex justify-content-between align-items-center">
+          <h5 class="m-0">Data Iuran</h5>
+          <div class="d-flex gap-2 align-items-center">
+            <input id="searchIuran" class="form-control" style="width:240px" placeholder="Cari...">
+            <button class="btn btn-outline-primary" onclick="exportExcel('tableIuran')">Export Excel</button>
+            <button class="btn btn-outline-danger" onclick="exportPDF('tableIuran','Data Iuran')">Export PDF</button>
+          </div>
+        </div>
+        <div class="table-responsive mt-3">
+          <table id="tableIuran" class="table table-bordered">
+            <thead><tr><th>Bulan</th><th>Nama</th><th>Jumlah</th><th>Status</th><th>Aksi</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- KEUANGAN -->
+    <div id="keuangan" class="mt-3 hidden">
+      <div class="card card-rounded p-3">
+        <div class="d-flex justify-content-between align-items-center">
+          <h5 class="m-0">Data Keuangan</h5>
+          <div class="d-flex gap-2 align-items-center">
+            <input id="searchKeu" class="form-control" style="width:240px" placeholder="Cari...">
+            <button class="btn btn-outline-primary" onclick="exportExcel('tableKeuangan')">Export Excel</button>
+            <button class="btn btn-outline-danger" onclick="exportPDF('tableKeuangan','Data Keuangan')">Export PDF</button>
+          </div>
+        </div>
+        <div class="table-responsive mt-3">
+          <table id="tableKeuangan" class="table table-bordered">
+            <thead><tr><th>Tanggal</th><th>Keterangan</th><th>Masuk</th><th>Keluar</th><th>Aksi</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- UPLOAD -->
+    <div id="upload" class="mt-3 hidden">
+      <div class="card card-rounded p-3">
+        <h5>Upload Files & Running Text</h5>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Upload Logo</label>
+            <input type="file" accept="image/*" class="form-control" onchange="previewLogo(event)">
+            <div class="form-text">Logo akan tampil di header & login.</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Upload Background</label>
+            <input type="file" accept="image/*" class="form-control" onchange="previewBackground(event)">
+            <div class="form-text">Background akan diterapkan ke seluruh halaman.</div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Upload Surat/Berita (PDF/JPG) — multiple</label>
+            <input type="file" class="form-control" multiple>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Running Text</label>
+            <input id="runningInput" class="form-control" placeholder="Isi teks berjalan...">
+          </div>
+          <div class="col-12">
+            <button class="btn btn-primary" onclick="updateTicker()">Simpan</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADMIN (forms) -->
+    <div id="admin" class="mt-3 hidden">
+      <div class="card card-rounded p-3 form-section">
+        <h5>Form Input (Admin)</h5>
+        <!-- Warga -->
+        <h6 class="mt-3">Tambah Data Warga</h6>
+        <div class="row g-2 align-items-center">
+          <div class="col-md-3"><input id="fNama" class="form-control" placeholder="Nama"></div>
+          <div class="col-md-2"><input id="fUmur" type="number" class="form-control" placeholder="Umur"></div>
+          <div class="col-md-2"><select id="fJK" class="form-select"><option value="L">Laki-laki</option><option value="P">Perempuan</option></select></div>
+          <div class="col-md-3"><input id="fJob" class="form-control" placeholder="Pekerjaan"></div>
+          <div class="col-md-1"><select id="fNikah" class="form-select"><option value="Kawin">Kawin</option><option value="Belum Kawin">Belum Kawin</option><option value="Cerai">Cerai</option></select></div>
+          <div class="col-md-1 d-flex align-items-center"><div class="form-check"><input id="fKK" class="form-check-input" type="checkbox"><label class="form-check-label">KK</label></div></div>
+          <div class="col-md-2"><button class="btn btn-success w-100" onclick="addWarga()">Tambah Warga</button></div>
+        </div>
+
+        <!-- Iuran -->
+        <h6 class="mt-4">Tambah Data Iuran</h6>
+        <div class="row g-2">
+          <div class="col-md-3"><select id="fBulan" class="form-select"><option>Jan</option><option>Feb</option><option>Mar</option><option>Apr</option><option>Mei</option><option>Jun</option><option>Jul</option><option>Agu</option><option>Sep</option><option>Okt</option><option>Nov</option><option>Des</option></select></div>
+          <div class="col-md-3"><input id="fNamaIuran" class="form-control" placeholder="Nama"></div>
+          <div class="col-md-3"><input id="fJumlahIuran" type="number" class="form-control" placeholder="Jumlah (Rp)"></div>
+          <div class="col-md-2"><select id="fStatusIuran" class="form-select"><option>Lunas</option><option>Belum</option></select></div>
+          <div class="col-md-1"><button class="btn btn-success w-100" onclick="addIuran()">Tambah</button></div>
+        </div>
+
+        <!-- Keuangan -->
+        <h6 class="mt-4">Tambah Data Keuangan</h6>
+        <div class="row g-2">
+          <div class="col-md-3"><input id="fTgl" type="date" class="form-control"></div>
+          <div class="col-md-4"><input id="fKet" class="form-control" placeholder="Keterangan"></div>
+          <div class="col-md-2"><input id="fMasuk" type="number" class="form-control" placeholder="Masuk (Rp)"></div>
+          <div class="col-md-2"><input id="fKeluar" type="number" class="form-control" placeholder="Keluar (Rp)"></div>
+          <div class="col-md-1"><button class="btn btn-success w-100" onclick="addKeu()">Tambah</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHOTOS -->
+    <div id="photos" class="mt-3 hidden">
+      <div class="card card-rounded p-3">
+        <h5>Foto Kegiatan</h5>
+        <div class="row g-3">
+          <div class="col-md-8">
+            <label class="form-label">Upload Foto Kegiatan (jpg/png)</label>
+            <input id="inputPhotos" type="file" accept="image/*" class="form-control" multiple>
+            <div class="mt-2"><button class="btn btn-success" onclick="handleUploadPhotos()">Upload Foto</button> <button class="btn btn-outline-danger" onclick="clearPhotos()">Hapus Semua Foto</button></div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Preview Terakhir</label>
+            <div id="lastPhotoPreview" style="min-height:120px;background:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(0,0,0,.04)"><small class="text-muted">Belum ada foto</small></div>
+          </div>
+        </div>
+        <hr class="my-3">
+        <h6>Gallery Foto Kegiatan</h6>
+        <div id="photoGallery" class="photo-grid mt-2"></div>
+      </div>
+    </div>
+
+    <!-- IMPORT -->
+    <div id="import" class="mt-3 hidden">
+      <div class="card card-rounded p-3">
+        <h5>Import Excel (.xlsx)</h5>
+        <p class="small text-muted">Rekomendasi header: Warga: nama, umur, jk, job, nikah, kk — Iuran: bulan, nama, jumlah, status — Keuangan: tgl, ket, masuk, keluar</p>
+        <div class="row g-3">
+          <div class="col-md-4"><input id="importWarga" type="file" class="form-control" accept=".xlsx,.xls"><button class="btn btn-primary mt-2" onclick="importExcel('warga')">Import Warga</button></div>
+          <div class="col-md-4"><input id="importIuran" type="file" class="form-control" accept=".xlsx,.xls"><button class="btn btn-primary mt-2" onclick="importExcel('iuran')">Import Iuran</button></div>
+          <div class="col-md-4"><input id="importKeu" type="file" class="form-control" accept=".xlsx,.xls"><button class="btn btn-primary mt-2" onclick="importExcel('keu')">Import Keuangan</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BACKUP -->
+    <div id="backup" class="mt-3 hidden">
+      <div class="card card-rounded p-3">
+        <h5>Backup & Restore</h5>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline-primary" onclick="downloadBackup()">Download Backup (JSON)</button>
+          <button class="btn btn-outline-success" onclick="restoreFromBackupPrompt()">Restore dari JSON</button>
+          <button class="btn btn-outline-secondary" onclick="clearAllData()">Reset Semua Data (Hapus LS)</button>
+        </div>
+        <div class="mt-3 small text-muted">Backup menyimpan warga, iuran, keuangan, foto, logo, background, teks berjalan.</div>
+      </div>
+    </div>
+
+  </div><!-- container -->
+</section>
+
+<!-- ======================= MODALS ======================= -->
+
+<!-- Edit Warga Modal -->
+<div class="modal fade" id="modalEditWarga" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Edit Data Warga</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-2"><input id="eNama" class="form-control" placeholder="Nama"></div>
+        <div class="mb-2"><input id="eUmur" type="number" class="form-control" placeholder="Umur"></div>
+        <div class="mb-2"><select id="eJK" class="form-select"><option value="L">Laki-laki</option><option value="P">Perempuan</option></select></div>
+        <div class="mb-2"><input id="eJob" class="form-control" placeholder="Pekerjaan"></div>
+        <div class="mb-2"><select id="eNikah" class="form-select"><option value="Kawin">Kawin</option><option value="Belum Kawin">Belum Kawin</option><option value="Cerai">Cerai</option></select></div>
+        <div class="form-check"><input id="eKK" class="form-check-input" type="checkbox"><label class="form-check-label">Kepala Keluarga</label></div>
+      </div>
+      <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Batal</button><button class="btn btn-primary" onclick="saveEditWarga()">Simpan</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Iuran Modal -->
+<div class="modal fade" id="modalEditIuran" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Edit Data Iuran</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-2"><input id="eBulan" class="form-control" placeholder="Bulan"></div>
+        <div class="mb-2"><input id="eNamaI" class="form-control" placeholder="Nama"></div>
+        <div class="mb-2"><input id="eJumlahI" type="number" class="form-control" placeholder="Jumlah"></div>
+        <div class="mb-2"><select id="eStatusI" class="form-select"><option>Lunas</option><option>Belum</option></select></div>
+      </div>
+      <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Batal</button><button class="btn btn-primary" onclick="saveEditIuran()">Simpan</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Keu Modal -->
+<div class="modal fade" id="modalEditKeu" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Edit Data Keuangan</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-2"><input id="eTgl" type="date" class="form-control"></div>
+        <div class="mb-2"><input id="eKet" class="form-control" placeholder="Keterangan"></div>
+        <div class="mb-2"><input id="eMasuk" type="number" class="form-control" placeholder="Masuk"></div>
+        <div class="mb-2"><input id="eKeluar" type="number" class="form-control" placeholder="Keluar"></div>
+      </div>
+      <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Batal</button><button class="btn btn-primary" onclick="saveEditKeu()">Simpan</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Activity Log Modal -->
+<div class="modal fade" id="modalLog" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Log Aktivitas</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body"><ul id="logList" class="list-group"></ul></div>
+      <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button><button class="btn btn-outline-danger" onclick="clearLog()">Hapus Log</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- README Modal -->
+<div class="modal fade" id="modalReadme" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">README — Cara Pakai</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <h6>Ringkasan</h6>
+        <ul>
+          <li>Login sebagai <b>admin/admin123</b> untuk akses penuh (input, upload, edit, delete, import, backup).</li>
+          <li>Login sebagai <b>user/user123</b> hanya melihat data.</li>
+          <li>Gunakan menu <i>Admin Input</i> untuk menambah data.</li>
+          <li>Edit tiap baris menggunakan tombol <b>Edit</b> (akan buka modal), hapus dengan tombol <b>Hapus</b>.</li>
+          <li>Upload foto di menu <i>Foto Kegiatan</i> — foto disimpan di browser.</li>
+          <li>Export Excel/PDF pada tiap tabel. Import Excel pada menu Import (file .xlsx dengan header rekomendasi).</li>
+          <li>Backup data ke JSON dan restore bila perlu.</li>
+        </ul>
+        <h6>Catatan teknis</h6>
+        <p>Semua data disimpan di <code>localStorage</code> browser. Untuk deploy permanen sebaiknya sambungkan ke backend/server dan database.</p>
+      </div>
+      <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= SCRIPTS ======================= -->
+<script>
+/* ---------------- Helpers ---------------- */
+const el = s => document.querySelector(s);
+const els = s => Array.from(document.querySelectorAll(s));
+const IDR = n => new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(n||0);
+
+/* ---------------- localStorage keys ---------------- */
+const LS = {
+  warga: 'rt_warga_v2',
+  iuran: 'rt_iuran_v2',
+  keu: 'rt_keu_v2',
+  photos: 'rt_photos_v2',
+  logo: 'rt_logo_v2',
+  bg: 'rt_bg_v2',
+  ticker: 'rt_ticker_v2',
+  log: 'rt_log_v2'
+};
+function loadLS(k, fallback){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):fallback }catch(e){ return fallback } }
+function saveLS(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){ console.warn('save error', e); } }
+
+/* ---------------- initial state (load or defaults) ---------------- */
+let warga = loadLS(LS.warga, [
+  {nama:'Budi', umur:40, jk:'L', job:'Petani', nikah:'Kawin', kk:true},
+  {nama:'Ani', umur:30, jk:'P', job:'Guru', nikah:'Kawin', kk:false},
+  {nama:'Sari', umur:22, jk:'P', job:'Mahasiswa', nikah:'Belum Kawin', kk:false},
+  {nama:'Tono', umur:45, jk:'L', job:'Wiraswasta', nikah:'Kawin', kk:true},
+  {nama:'Joko', umur:50, jk:'L', job:'PNS', nikah:'Cerai', kk:true}
+]);
+let iuran = loadLS(LS.iuran, [
+  {bulan:'Jan', nama:'Budi', jumlah:50000, status:'Lunas'},
+  {bulan:'Jan', nama:'Ani', jumlah:50000, status:'Lunas'},
+  {bulan:'Feb', nama:'Budi', jumlah:50000, status:'Lunas'},
+  {bulan:'Feb', nama:'Sari', jumlah:50000, status:'Belum'}
+]);
+let keuangan = loadLS(LS.keu, [
+  {tgl:'2025-08-01', ket:'Kas Masuk Iuran', masuk:200000, keluar:0},
+  {tgl:'2025-08-02', ket:'Kas Ronda', masuk:0, keluar:50000}
+]);
+let photos = loadLS(LS.photos, []);
+let logList = loadLS(LS.log, []);
+
+/* Restore logo/bg/ticker if exists */
+const savedLogo = loadLS(LS.logo, null);
+if(savedLogo){ el('#logoMain').src=savedLogo; el('#logoLogin').src=savedLogo; }
+const savedBg = loadLS(LS.bg, null);
+if(savedBg){ document.body.style.backgroundImage=`url('${savedBg}')`; document.body.style.backgroundSize='cover'; }
+const savedTicker = loadLS(LS.ticker, null);
+if(savedTicker) el('#runningText').textContent = savedTicker;
+
+/* ---------------- activity log ---------------- */
+function pushLog(action){
+  const item = { t: new Date().toISOString(), action };
+  logList.unshift(item);
+  saveLS(LS.log, logList);
+}
+function openLog(){
+  const modal = new bootstrap.Modal(document.getElementById('modalLog'));
+  const list = el('#logList'); list.innerHTML='';
+  if(logList.length===0) list.innerHTML = '<li class="list-group-item text-muted">Belum ada aktivitas.</li>';
+  else logList.forEach(l => {
+    const li = document.createElement('li');
+    li.className = 'list-group-item';
+    li.innerHTML = `<div class="small text-muted">${new Date(l.t).toLocaleString()}</div><div>${escapeHtml(l.action)}</div>`;
+    list.appendChild(li);
+  });
+  modal.show();
+}
+function clearLog(){
+  if(!confirm('Hapus semua log aktivitas?')) return;
+  logList = []; saveLS(LS.log, logList); el('#logList').innerHTML = '<li class="list-group-item text-muted">Belum ada aktivitas.</li>';
+  pushLog('Hapus semua log');
+}
+
+/* ---------------- auth ---------------- */
+let currentRole = null;
+function login(){
+  const u = el('#username').value.trim();
+  const p = el('#password').value.trim();
+  if(u==='admin' && p==='admin123') currentRole='admin';
+  else if(u==='user' && p==='user123') currentRole='user';
+  else return alert('Creds salah!\nAdmin: admin/admin123\nUser: user/user123');
+
+  el('#loginPage').classList.add('hidden');
+  el('#app').classList.remove('hidden');
+  if(currentRole !== 'admin') els('.adminOnly').forEach(x=>x.classList.add('hidden'));
+  pushLog(`Login sebagai ${currentRole}`);
+  startClock(); startSlideshow(); renderAll();
+}
+function logout(){ pushLog(`Logout (${currentRole})`); location.reload(); }
+
+/* quick demo fill */
+function fillDemo(){ el('#username').value='admin'; el('#password').value='admin123'; }
+
+/* ---------------- tabs ---------------- */
+els('#tabs .nav-link').forEach(a=>{
+  a.addEventListener('click', ()=>{
+    els('#tabs .nav-link').forEach(x=>x.classList.remove('active'));
+    a.classList.add('active');
+    const tgt = a.dataset.target;
+    ['home','dashboard','data','iuran','keuangan','upload','admin','photos','import','backup'].forEach(id=>{
+      const elid=document.getElementById(id);
+      if(!elid) return;
+      if(id===tgt) elid.classList.remove('hidden'); else elid.classList.add('hidden');
+    });
+  });
+});
+
+/* ---------------- clock & slideshow ---------------- */
+function startClock(){ updateClock(); setInterval(updateClock,1000); }
+function updateClock(){
+  const now=new Date();
+  const hari=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'][now.getDay()];
+  const fmt=now.toLocaleString('id-ID',{ day:'2-digit', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  el('#dateTime').textContent = `${hari}, ${fmt}`;
+}
+function startSlideshow(){
+  const imgs = document.querySelectorAll('.slideshow img');
+  if(!imgs || imgs.length===0) return;
+  let i=0;
+  setInterval(()=>{ imgs[i].classList.remove('active'); i=(i+1)%imgs.length; imgs[i].classList.add('active'); }, 3500);
+}
+
+/* ---------------- render tables & gallery ---------------- */
+function renderWarga(){
+  const tb = el('#tableWarga tbody'); tb.innerHTML='';
+  warga.forEach((w, idx)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td>${escapeHtml(w.nama)}</td><td>${w.umur}</td><td>${w.jk}</td><td>${escapeHtml(w.job)}</td><td>${w.nikah}</td><td>${w.kk?'Ya':'-'}</td>
+      <td>${ currentRole==='admin' ? `<button class="btn btn-sm btn-outline-primary" onclick="openEditWarga(${idx})">Edit</button><button class="btn btn-sm btn-outline-danger action-btn" onclick="deleteWarga(${idx})">Hapus</button>` : '-' }</td>`;
+    tb.appendChild(tr);
+  });
+}
+function renderIuran(){
+  const tb = el('#tableIuran tbody'); tb.innerHTML='';
+  iuran.forEach((it, idx)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td>${escapeHtml(it.bulan)}</td><td>${escapeHtml(it.nama)}</td><td>${IDR(it.jumlah)}</td><td>${it.status}</td>
+      <td>${ currentRole==='admin' ? `<button class="btn btn-sm btn-outline-primary" onclick="openEditIuran(${idx})">Edit</button><button class="btn btn-sm btn-outline-danger action-btn" onclick="deleteIuran(${idx})">Hapus</button>` : '-' }</td>`;
+    tb.appendChild(tr);
+  });
+}
+function renderKeu(){
+  const tb = el('#tableKeuangan tbody'); tb.innerHTML='';
+  keuangan.forEach((k, idx)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td>${k.tgl}</td><td>${escapeHtml(k.ket)}</td><td>${IDR(k.masuk)}</td><td>${IDR(k.keluar)}</td>
+      <td>${ currentRole==='admin' ? `<button class="btn btn-sm btn-outline-primary" onclick="openEditKeu(${idx})">Edit</button><button class="btn btn-sm btn-outline-danger action-btn" onclick="deleteKeu(${idx})">Hapus</button>` : '-' }</td>`;
+    tb.appendChild(tr);
+  });
+}
+function renderPhotos(){
+  const g = el('#photoGallery'); g.innerHTML='';
+  if(!photos || photos.length===0){
+    g.innerHTML = '<div class="text-muted">Belum ada foto kegiatan.</div>';
+    el('#lastPhotoPreview').innerHTML = '<small class="text-muted">Belum ada foto</small>';
+    return;
+  }
+  const last = photos[photos.length-1];
+  el('#lastPhotoPreview').innerHTML = `<img src="${last.dataUrl}" style="max-width:100%; border-radius:8px; max-height:150px; object-fit:cover">`;
+  photos.slice().reverse().forEach(p => {
+    const box = document.createElement('div'); box.className='photo';
+    box.innerHTML = `<img src="${p.dataUrl}" alt="${escapeHtml(p.name||'foto')}"><div class="meta">${escapeHtml(p.name||'Foto kegiatan')} • ${new Date(p.t).toLocaleString()}</div>
+      ${ currentRole==='admin' ? `<div class="del-btn" onclick="deletePhoto('${p.id}')">Hapus</div>` : '' }`;
+    g.appendChild(box);
+  });
+}
+
+/* ---------------- charts & stats ---------------- */
+let chartDemo=null, chartKeu=null;
+function updateDemografi(){
+  const jmlL = warga.filter(w=>w.jk==='L').length;
+  const jmlP = warga.filter(w=>w.jk==='P').length;
+  if(chartDemo) chartDemo.destroy();
+  chartDemo = new Chart(el('#demografiChart'), { type:'pie', data:{ labels:['Laki-laki','Perempuan'], datasets:[{ data:[jmlL,jmlP], backgroundColor:['#2563eb','#ff7f50'] }] }, options:{ responsive:true } });
+  el('#cardTotalKK').textContent = warga.filter(w=>w.kk).length;
+  const jobs = new Set(warga.map(w=>w.job.trim().toLowerCase()).filter(Boolean));
+  el('#cardTotalJob').textContent = jobs.size;
+  el('#cardNikahKawin').textContent = warga.filter(w=>w.nikah==='Kawin').length;
+  el('#cardNikahBelum').textContent = warga.filter(w=>w.nikah==='Belum Kawin').length;
+  el('#cardNikahCerai').textContent = warga.filter(w=>w.nikah==='Cerai').length;
+}
+function updateFinance(){
+  let masuk=0, keluar=0;
+  keuangan.forEach(k=>{ masuk += (+k.masuk||0); keluar += (+k.keluar||0); });
+  const sisa = masuk - keluar;
+  if(chartKeu) chartKeu.destroy();
+  chartKeu = new Chart(el('#financeChart'), { type:'bar', data:{ labels:['Pemasukan','Pengeluaran','Sisa Kas'], datasets:[{ data:[masuk,keluar,sisa], backgroundColor:['#198754','#dc3545','#0dcaf0'] }] }, options:{ responsive:true, plugins:{ legend:{ display:false } } } });
+  el('#cardTotalIn').textContent = IDR(masuk);
+  el('#cardTotalOut').textContent = IDR(keluar);
+  el('#cardTotalBal').textContent = IDR(sisa);
+}
+
+/* ---------------- admin add/edit/delete ---------------- */
+/* Warga */
+function addWarga(){
+  if(currentRole!=='admin') return alert('Hanya admin.');
+  const nama = el('#fNama').value.trim();
+  const umur = +el('#fUmur').value || 0;
+  const jk = el('#fJK').value;
+  const job = el('#fJob').value.trim();
+  const nikah = el('#fNikah').value;
+  const kk = !!el('#fKK').checked;
+  if(!nama || !umur || !job) return alert('Isi Nama, Umur, dan Pekerjaan.');
+  warga.push({ nama, umur, jk, job, nikah, kk });
+  saveLS(LS.warga, warga); renderWarga(); updateDemografi(); pushLog(`Tambah warga: ${nama}`); el('#fNama').value=''; el('#fUmur').value=''; el('#fJob').value=''; el('#fKK').checked=false;
+}
+let editWargaIndex = null;
+function openEditWarga(i){
+  editWargaIndex = i;
+  const w = warga[i];
+  el('#eNama').value = w.nama; el('#eUmur').value = w.umur; el('#eJK').value = w.jk; el('#eJob').value = w.job; el('#eNikah').value = w.nikah; el('#eKK').checked = !!w.kk;
+  new bootstrap.Modal(document.getElementById('modalEditWarga')).show();
+}
+function saveEditWarga(){
+  if(editWargaIndex===null) return;
+  const nama = el('#eNama').value.trim(); const umur = +el('#eUmur').value || 0; const jk = el('#eJK').value; const job = el('#eJob').value.trim(); const nikah = el('#eNikah').value; const kk = !!el('#eKK').checked;
+  if(!nama || !umur || !job) return alert('Lengkapi data.');
+  warga[editWargaIndex] = { nama, umur, jk, job, nikah, kk };
+  saveLS(LS.warga, warga); renderWarga(); updateDemografi(); pushLog(`Edit warga: ${nama}`); editWargaIndex=null;
+  bootstrap.Modal.getInstance(document.getElementById('modalEditWarga')).hide();
+}
+function deleteWarga(i){
+  if(currentRole!=='admin') return alert('Hanya admin.');
+  if(!confirm('Hapus data warga?')) return;
+  const name = warga[i].nama;
+  warga.splice(i,1); saveLS(LS.warga, warga); renderWarga(); updateDemografi(); pushLog(`Hapus warga: ${name}`);
+}
+
+/* Iuran */
+function addIuran(){
+  if(currentRole!=='admin') return alert('Hanya admin.');
+  const bulan = el('#fBulan').value; const nama = el('#fNamaIuran').value.trim(); const jumlah = +el('#fJumlahIuran').value || 0; const status = el('#fStatusIuran').value;
+  if(!nama || !jumlah) return alert('Isi nama & jumlah.');
+  iuran.push({ bulan, nama, jumlah, status }); saveLS(LS.iuran, iuran); renderIuran(); pushLog(`Tambah iuran: ${nama} (${bulan})`); el('#fNamaIuran').value=''; el('#fJumlahIuran').value='';
+}
+let editIuranIndex = null;
+function openEditIuran(i){ editIuranIndex=i; const it=iuran[i]; el('#eBulan').value=it.bulan; el('#eNamaI').value=it.nama; el('#eJumlahI').value=it.jumlah; el('#eStatusI').value=it.status; new bootstrap.Modal(document.getElementById('modalEditIuran')).show(); }
+function saveEditIuran(){ if(editIuranIndex===null) return; const bulan=el('#eBulan').value, nama=el('#eNamaI').value.trim(), jumlah=+el('#eJumlahI').value||0, status=el('#eStatusI').value; if(!nama||!jumlah) return alert('Lengkapi data.'); iuran[editIuranIndex]={bulan,nama,jumlah,status}; saveLS(LS.iuran,iuran); renderIuran(); pushLog(`Edit iuran: ${nama}`); editIuranIndex=null; bootstrap.Modal.getInstance(document.getElementById('modalEditIuran')).hide(); }
+function deleteIuran(i){ if(currentRole!=='admin') return alert('Hanya admin.'); if(!confirm('Hapus data iuran?')) return; const name=iuran[i].nama; iuran.splice(i,1); saveLS(LS.iuran,iuran); renderIuran(); pushLog(`Hapus iuran: ${name}`); }
+
+/* Keuangan */
+function addKeu(){
+  if(currentRole!=='admin') return alert('Hanya admin.');
+  const tgl = el('#fTgl').value || new Date().toISOString().slice(0,10);
+  const ket = el('#fKet').value.trim() || '-'; const masuk = +el('#fMasuk').value || 0; const keluar = +el('#fKeluar').value || 0;
+  if(masuk===0 && keluar===0) return alert('Isi Masuk atau Keluar.');
+  keuangan.push({ tgl, ket, masuk, keluar }); saveLS(LS.keu, keuangan); renderKeu(); updateFinance(); pushLog(`Tambah keuangan: ${ket} (${IDR(masuk)}/${IDR(keluar)})`); el('#fTgl').value=''; el('#fKet').value=''; el('#fMasuk').value=''; el('#fKeluar').value='';
+}
+let editKeuIndex = null;
+function openEditKeu(i){ editKeuIndex=i; const k=keuangan[i]; el('#eTgl').value=k.tgl; el('#eKet').value=k.ket; el('#eMasuk').value=k.masuk; el('#eKeluar').value=k.keluar; new bootstrap.Modal(document.getElementById('modalEditKeu')).show(); }
+function saveEditKeu(){ if(editKeuIndex===null) return; const tgl=el('#eTgl').value, ket=el('#eKet').value.trim(), masuk=+el('#eMasuk').value||0, keluar=+el('#eKeluar').value||0; if(masuk===0 && keluar===0) return alert('Isi Masuk atau Keluar.'); keuangan[editKeuIndex]={tgl,ket,masuk,keluar}; saveLS(LS.keu,keuangan); renderKeu(); updateFinance(); pushLog(`Edit keuangan: ${ket}`); editKeuIndex=null; bootstrap.Modal.getInstance(document.getElementById('modalEditKeu')).hide(); }
+function deleteKeu(i){ if(currentRole!=='admin') return alert('Hanya admin.'); if(!confirm('Hapus catatan keuangan?')) return; const ket=keuangan[i].ket; keuangan.splice(i,1); saveLS(LS.keu,keuangan); renderKeu(); updateFinance(); pushLog(`Hapus keuangan: ${ket}`); }
+
+/* ---------------- photos (upload/delete/clear) ---------------- */
+function handleUploadPhotos(){
+  if(currentRole!=='admin') return alert('Hanya admin.');
+  const input = el('#inputPhotos'); if(!input.files || input.files.length===0) return alert('Pilih foto terlebih dahulu.');
+  const files = Array.from(input.files); let added=0;
+  files.forEach(file => {
+    if(!file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const id = 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
+      photos.push({ id, dataUrl: ev.target.result, name: file.name, t: Date.now() });
+      saveLS(LS.photos, photos); renderPhotos(); pushLog(`Upload foto: ${file.name}`); added++;
+    };
+    reader.readAsDataURL(file);
+  });
+  input.value=''; if(added) alert('Foto di-upload.');
+}
+function deletePhoto(id){ if(currentRole!=='admin') return alert('Hanya admin.'); if(!confirm('Hapus foto ini?')) return; photos = photos.filter(p=>p.id!==id); saveLS(LS.photos, photos); renderPhotos(); pushLog('Hapus foto kegiatan'); }
+function clearPhotos(){ if(currentRole!=='admin') return alert('Hanya admin.'); if(!confirm('Hapus semua foto?')) return; photos=[]; saveLS(LS.photos, photos); renderPhotos(); pushLog('Hapus semua foto'); }
+
+/* ---------------- preview logo & background & ticker ---------------- */
+function previewLogo(e){ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=ev=>{ el('#logoMain').src=ev.target.result; el('#logoLogin').src=ev.target.result; saveLS(LS.logo, ev.target.result); pushLog('Upload logo'); }; r.readAsDataURL(f); }
+function previewBackground(e){ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=ev=>{ document.body.style.backgroundImage = `url('${ev.target.result}')`; document.body.style.backgroundSize='cover'; saveLS(LS.bg, ev.target.result); pushLog('Upload background'); }; r.readAsDataURL(f); }
+function updateTicker(){ const v=el('#runningInput').value.trim(); if(!v) return alert('Isi running text.'); el('#runningText').textContent = v; saveLS(LS.ticker, v); pushLog('Update running text'); alert('Running text diperbarui.'); }
+
+/* ---------------- import Excel ---------------- */
+function importExcel(kind){
+  if(currentRole!=='admin') return alert('Hanya admin.');
+  const input = kind==='warga' ? el('#importWarga') : kind==='iuran' ? el('#importIuran') : el('#importKeu');
+  if(!input || !input.files || !input.files[0]) return alert('Pilih file .xlsx terlebih dahulu.');
+  const file = input.files[0];
+  const reader = new FileReader();
+  reader.onload = e => {
+    try{
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type:'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const arr = XLSX.utils.sheet_to_json(ws, { defval:'' });
+      if(!arr || !arr.length) return alert('File kosong atau format salah.');
+      // map keys lower
+      const rows = arr.map(r => { const obj={}; Object.keys(r).forEach(k=>obj[k.toString().trim().toLowerCase()]=r[k]); return obj; });
+      if(kind==='warga'){
+        rows.forEach(m => {
+          const nama = m.nama || m.name || ''; const umur = +(m.umur || m.age || 0); const jk = (m.jk||m.gender||'').toString().charAt(0).toUpperCase()||'L';
+          const job = m.job || m.pekerjaan || ''; const nikah = m.nikah || m['status nikah'] || 'Belum Kawin'; const kk = ['1','true','ya','yes'].includes(String(m.kk||'').toLowerCase());
+          if(nama) warga.push({ nama:String(nama).trim(), umur, jk, job:String(job).trim(), nikah:String(nikah).trim(), kk });
+        });
+        saveLS(LS.warga, warga); renderWarga(); updateDemografi(); pushLog('Import Excel: Warga');
+      } else if(kind==='iuran'){
+        rows.forEach(m => {
+          const bulan = m.bulan || '', nama = m.nama || '', jumlah = +(m.jumlah || m.amount || 0), status = m.status || 'Belum';
+          if(nama) iuran.push({ bulan:String(bulan).trim(), nama:String(nama).trim(), jumlah, status:String(status).trim() });
+        });
+        saveLS(LS.iuran, iuran); renderIuran(); pushLog('Import Excel: Iuran');
+      } else if(kind==='keu'){
+        rows.forEach(m => {
+          const tgl = m.tgl || m.date || new Date().toISOString().slice(0,10), ket = m.ket || m.keterangan || m.desc || '', masuk = +(m.masuk||m.in||0), keluar = +(m.keluar||m.out||0);
+          if(tgl || ket) keuangan.push({ tgl:String(tgl).trim(), ket:String(ket).trim(), masuk, keluar });
+        });
+        saveLS(LS.keu, keuangan); renderKeu(); updateFinance(); pushLog('Import Excel: Keuangan');
+      }
+      input.value='';
+      alert('Import selesai.');
+    }catch(err){ console.error(err); alert('Import gagal: '+err.message); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* ---------------- backup & restore ---------------- */
+function downloadBackup(){
+  const dump = { warga, iuran, keuangan, photos, ticker: el('#runningText').textContent || '', logo: el('#logoMain').src || '', bg: document.body.style.backgroundImage || '' };
+  const blob = new Blob([JSON.stringify(dump, null, 2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download = `rt_backup_${new Date().toISOString().slice(0,10)}.json`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  pushLog('Download backup JSON');
+}
+function restoreFromBackupPrompt(){
+  if(currentRole!=='admin') return alert('Hanya admin.');
+  const input = document.createElement('input'); input.type='file'; input.accept='.json'; input.onchange = e => {
+    const f = e.target.files[0]; if(!f) return;
+    const r = new FileReader();
+    r.onload = ev => {
+      try{
+        const obj = JSON.parse(ev.target.result);
+        if(!confirm('Restore akan menimpa data saat ini. Lanjutkan?')) return;
+        warga = obj.warga || []; iuran = obj.iuran || []; keuangan = obj.keuangan || []; photos = obj.photos || [];
+        saveLS(LS.warga, warga); saveLS(LS.iuran, iuran); saveLS(LS.keu, keuangan); saveLS(LS.photos, photos);
+        if(obj.ticker){ el('#runningText').textContent = obj.ticker; saveLS(LS.ticker, obj.ticker); }
+        if(obj.logo){ el('#logoMain').src = obj.logo; el('#logoLogin').src = obj.logo; saveLS(LS.logo, obj.logo); }
+        if(obj.bg){ document.body.style.backgroundImage = `url('${obj.bg}')`; saveLS(LS.bg, obj.bg); }
+        renderAll(); pushLog('Restore dari backup JSON'); alert('Restore selesai.');
+      }catch(err){ alert('Restore gagal: '+err.message); }
+    };
+    r.readAsText(f);
+  };
+  input.click();
+}
+function clearAllData(){
+  if(!confirm('Reset semua data di localStorage dan muat ulang?')) return;
+  Object.values(LS).forEach(k => localStorage.removeItem(k));
+  alert('Data dihapus. Halaman akan dimuat ulang.'); pushLog('Reset semua data'); location.reload();
+}
+
+/* ---------------- export helpers ---------------- */
+function exportExcel(tableId){
+  const table = document.getElementById(tableId);
+  const wb = XLSX.utils.table_to_book(table, { sheet: 'Sheet1' });
+  XLSX.writeFile(wb, tableId + '.xlsx');
+}
+function exportPDF(tableId, title){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF('p','pt','a4'); doc.setFontSize(14); doc.text(title, 40, 40);
+  doc.autoTable({ html: '#'+tableId, startY: 60, styles:{ fontSize:9 } }); doc.save(title + '.pdf');
+}
+
+/* ---------------- search binding ---------------- */
+function bindSearch(inpSel, tableSel){
+  const inp = el(inpSel);
+  if(!inp) return;
+  inp.addEventListener('input', ()=> {
+    const q = inp.value.toLowerCase();
+    els(tableSel + ' tbody tr').forEach(tr => {
+      tr.style.display = tr.innerText.toLowerCase().includes(q) ? '' : 'none';
+    });
+  });
+}
+
+/* ---------------- utilities ---------------- */
+function escapeHtml(s){ return String(s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+
+/* ---------------- render all ---------------- */
+function renderAll(){
+  renderWarga(); renderIuran(); renderKeu(); renderPhotos(); updateDemografi(); updateFinance();
+  bindSearch('#searchWarga','#tableWarga'); bindSearch('#searchIuran','#tableIuran'); bindSearch('#searchKeu','#tableKeuangan');
+}
+
+/* ---------------- open readme ---------------- */
+function openReadme(){ new bootstrap.Modal(document.getElementById('modalReadme')).show(); }
+
+/* ---------------- initial state (nothing auto-run until login) ---------------- */
+// ready
+
+</script>
+</body>
+</html>
